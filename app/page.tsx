@@ -1,6 +1,6 @@
 "use client";
 import { useState, useRef, useCallback } from "react";
-import { Upload, Download, Loader2, Sparkles, FileText, Settings2, RefreshCw } from "lucide-react";
+import { Upload, Download, Loader2, Sparkles, FileText, Settings2, RefreshCw, AlertTriangle } from "lucide-react";
 import Preview3D from "@/components/Preview3D";
 import { runPipeline, type PipelineProgress, type PipelineResult } from "@/lib/pipeline";
 import { DIFFICULTY_CONFIG, type Difficulty, type Mesh } from "@/lib/types";
@@ -21,15 +21,24 @@ export default function HomePage() {
   const handleFile = useCallback(async (f: File) => {
     setError(null);
     setResult(null);
+    if (f.size > 100 * 1024 * 1024) {
+      setError(`檔案太大 (${(f.size / 1024 / 1024).toFixed(1)}MB)，請使用 < 100MB 的檔案`);
+      return;
+    }
     try {
       const buffer = await f.arrayBuffer();
       const baseName = f.name.replace(/\.[^.]+$/, "");
+      const parsed = await parseModel(f.name, buffer);
+      if (parsed.faces.length === 0) {
+        setError("檔案內沒有任何 3D 面，請檢查格式");
+        return;
+      }
       setFile({ name: f.name, buffer });
       setTitle(baseName);
-      const parsed = await parseModel(f.name, buffer);
       setMesh(parsed);
     } catch (e: any) {
-      setError(e.message || "解析失敗");
+      console.error("[Upload] Parse error:", e);
+      setError(`解析失敗：${e.message || String(e)}`);
       setFile(null);
       setMesh(null);
     }
@@ -55,7 +64,8 @@ export default function HomePage() {
       });
       setResult(r);
     } catch (e: any) {
-      setError(e.message || "生成失敗");
+      console.error("[Pipeline] Error:", e);
+      setError(e.message || "生成失敗，請開啟 Console (F12) 查看詳情");
     } finally {
       setProgress(null);
     }
@@ -79,6 +89,10 @@ export default function HomePage() {
     setTitle("");
     if (inputRef.current) inputRef.current.value = "";
   };
+
+  // 大檔警告
+  const isLargeMesh = mesh && mesh.faces.length > 5000;
+  const isHugeMesh = mesh && mesh.faces.length > 30000;
 
   return (
     <main className="min-h-screen flex flex-col">
@@ -126,7 +140,7 @@ export default function HomePage() {
               <Upload className="w-16 h-16 mx-auto mb-4 text-accent" />
               <h3 className="text-2xl font-bold mb-2">點擊或拖放 3D 檔案到這裡</h3>
               <p className="text-brand-200">支援 .OBJ · .STL · .GLB · .GLTF</p>
-              <p className="text-brand-300 text-sm mt-2">建議 &lt; 30MB</p>
+              <p className="text-brand-300 text-sm mt-2">建議 &lt; 30MB · 大檔會自動減面</p>
               <input
                 ref={inputRef}
                 type="file"
@@ -182,13 +196,29 @@ export default function HomePage() {
               <div className="mt-3 bg-brand-800/40 rounded-lg p-3 text-sm">
                 <div className="flex justify-between">
                   <span className="text-brand-200">頂點數</span>
-                  <span className="font-mono">{mesh.vertices.length}</span>
+                  <span className="font-mono">{mesh.vertices.length.toLocaleString()}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-brand-200">面數</span>
-                  <span className="font-mono">{mesh.faces.length}</span>
+                  <span className="font-mono">{mesh.faces.length.toLocaleString()}</span>
                 </div>
               </div>
+
+              {isHugeMesh && (
+                <div className="mt-3 p-3 rounded-lg bg-yellow-900/30 border border-yellow-700 text-yellow-200 text-xs flex gap-2">
+                  <AlertTriangle className="w-4 h-4 flex-shrink-0 mt-0.5" />
+                  <div>
+                    <strong>面數很大 ({mesh.faces.length.toLocaleString()})</strong><br />
+                    生成時會自動猛減到目標面數，可能需要 30-60 秒。請耐心等候。
+                  </div>
+                </div>
+              )}
+              {isLargeMesh && !isHugeMesh && (
+                <div className="mt-3 p-3 rounded-lg bg-blue-900/20 border border-blue-700 text-blue-200 text-xs flex gap-2">
+                  <AlertTriangle className="w-4 h-4 flex-shrink-0 mt-0.5" />
+                  <div>面數較多，生成可能需要 10-20 秒</div>
+                </div>
+              )}
             </div>
 
             <div className="space-y-5">
@@ -260,6 +290,9 @@ export default function HomePage() {
               {error && (
                 <div className="p-4 rounded-lg bg-red-900/30 border border-red-700 text-red-200 text-sm">
                   ❌ {error}
+                  <div className="mt-2 text-xs text-red-300">
+                    按 F12 開啟 Console 可以看到更詳細的錯誤訊息
+                  </div>
                 </div>
               )}
             </div>
@@ -294,7 +327,7 @@ export default function HomePage() {
               </div>
               {result.papercraft.stats.originalFaces > result.papercraft.stats.decimatedFaces && (
                 <p className="text-xs text-brand-300 mt-4">
-                  ℹ️ 原始 {result.papercraft.stats.originalFaces} 面已自動簡化到 {result.papercraft.stats.decimatedFaces} 面
+                  ℹ️ 原始 {result.papercraft.stats.originalFaces.toLocaleString()} 面已自動簡化到 {result.papercraft.stats.decimatedFaces} 面
                 </p>
               )}
             </div>
