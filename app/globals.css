@@ -1,0 +1,37 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --brand: #02133e;
+}
+
+html, body {
+  background-color: #02133e;
+  color: #ffffff;
+}
+
+/* 滾動條美化 */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: #02133e;
+}
+::-webkit-scrollbar-thumb {
+  background: #344a82;
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #5a6da1;
+}
+
+/* 拖放區動畫 */
+@keyframes pulse-border {
+  0%, 100% { border-color: rgba(244, 183, 64, 0.5); }
+  50% { border-color: rgba(244, 183, 64, 1); }
+}
+.dropzone-active {
+  animation: pulse-border 1.5s ease-in-out infinite;
+}
